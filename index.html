@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SACI - Sistema de Asistencia</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="p-4 max-w-md mx-auto bg-gray-100">
+
+    <!-- SECCIÓN 1: INTERFAZ DEL ELEMENTO (MÓVIL) -->
+    <div id="vistaUsuario" class="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mt-4">
+        <div class="flex justify-between items-center mb-2">
+            <h1 class="text-2xl font-bold text-[#691C32]">ASISTENCIA R12</h1>
+            <!-- Acceso protegido -->
+            <button onclick="accederComoAdmin()" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-medium">Panel Admin</button>
+        </div>
+        <p class="text-xs text-gray-500 mb-6">Registro de Asistencia</p>
+
+        <form id="attendanceForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Nombre</label>
+                <select id="selectNombre" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required></select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Comisión de Trabajo</label>
+                <select id="selectComision" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required></select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Municipio</label>
+                <select id="selectMunicipio" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required></select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <div>
+                    <span class="block text-[11px] font-bold text-gray-500 uppercase">Fecha</span>
+                    <span id="txtFecha" class="text-sm font-semibold text-gray-800">—</span>
+                </div>
+                <div>
+                    <span class="block text-[11px] font-bold text-gray-500 uppercase">Hora</span>
+                    <span id="txtHora" class="text-sm font-semibold text-gray-800">—</span>
+                </div>
+            </div>
+
+            <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50">
+                <label class="block cursor-pointer">
+                    <span class="text-indigo-600 font-medium text-sm block mb-2">📸 Tomar Fotografía</span>
+                    <input type="file" id="fotoInput" accept="image/*" capture="environment" class="hidden" required>
+                </label>
+                <div id="previewContainer" class="hidden mt-2">
+                    <img id="fotoPreview" class="w-full h-40 object-cover rounded-lg mx-auto">
+                </div>
+            </div>
+
+            <div id="gpsStatus" class="text-xs text-center text-gray-500 font-mono bg-gray-50 p-2 rounded-lg">
+                Detectando coordenadas GPS...
+            </div>
+
+            <button type="submit" class="w-full bg-[#691C32] text-white p-3.5 rounded-xl font-bold shadow-md hover:bg-[#4c1222]">
+                Registrar Asistencia
+            </button>
+        </form>
+    </div>
+
+    <!-- SECCIÓN 2: PANEL ADMINISTRADOR PRIVADO (REPORTES Y CRUCES) -->
+    <div id="vistaAdmin" class="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mt-4 hidden">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-800">Panel de Control Exclusivo</h2>
+            <button onclick="cerrarSesionAdmin()" class="text-xs bg-gray-600 text-white px-3 py-1 rounded-lg">Cerrar Sesión</button>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="grid grid-cols-2 gap-2 mb-6">
+            <button onclick="exportarExcel()" class="bg-green-700 text-white p-2.5 rounded-xl text-sm font-bold shadow hover:bg-green-800">
+                📊 Descargar Excel
+            </button>
+            <button onclick="ejecutarCruce()" class="bg-indigo-600 text-white p-2.5 rounded-xl text-sm font-bold shadow hover:bg-indigo-700">
+                🔍 Recargar Cruce
+            </button>
+        </div>
+
+        <!-- Resultados del Cruce -->
+        <div class="space-y-4">
+            <div class="bg-red-50 p-4 rounded-xl border border-red-200">
+                <h3 class="text-sm font-bold text-red-800 mb-2">⚠️ ELEMENTOS OMISOS HOY (<span id="numOmisos">0</span>)</h3>
+                <ul id="listaOmisos" class="text-xs text-red-700 list-disc pl-4 space-y-1 max-h-40 overflow-y-auto">
+                    <!-- Solo tú lo verás aquí -->
+                </ul>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <h3 class="text-sm font-bold text-gray-800 mb-2">📋 Asistencias Registradas (<span id="numAsistencias">0</span>)</h3>
+                <div id="tablaAsistencias" class="text-[11px] text-gray-600 space-y-2 max-h-60 overflow-y-auto">
+                    <!-- Registros guardados -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================================
+        // CONFIGURACIÓN DE TU CLAVE SECRETA Y CATÁLOGOS (EDITABLE)
+        // ==========================================================
+        const CLAVE_ADMIN_SECRETA = "1827"; // <-- CAMBIA AQUÍ TU CONTRASEÑA
+
+        const BASE_DE_DATOS_LOCAL = {
+            personal: ["AGUSTIN BUENAVENTURA GISPERT BURGOS",
+  "ALEJANDRA CARRILLO DELGADO",
+  "ALEJANDRA JUDITH TRIGUEROS VARGAS",
+  "ALEJANDRINA MORA GARCIA",
+  "ALICIA MARTINEZ MARIN",
+  "ALMA ROSA FLORES MONTES",
+  "ALMA ROSA VALENTIN COSINO",
+  "ANA MARIA SOLANO PAREDES",
+  "BEATRIZ HERNANDEZ NIETO",
+  "BLANCA ENEYDA ESTRADA AGUILAR",
+  "BLANCA ESTELA ARRIAGA ROJAS",
+  "BRISA MARIA VILLASEÑOR SOSA",
+  "CARLOS ALBERTO PEREZ CARBAJAL",
+  "CESAR AGUIRRE JUAREZ",
+  "CINTHYA VERONICA CALLEROS GUTIERREZ",
+  "CLAUDIA LILIANA INFANTE PAREDES",
+  "CRISTOBAL CORTES GONZALEZ",
+  "DANIEL GARCIA BAUTISTA",
+  "DANIELA AVALOS VAZQUEZ",
+  "DANIELA JACQUELINE SALAZAR SANCHEZ",
+  "DOLORES JANETH DE LA CRUZ GARCIA",
+  "EDITH FLORES HUERTA",
+  "EDUARDO RAUL HERNANDEZ HERNANDEZ",
+  "ENRIQUETA NOEMI GUERRERO OCHOA",
+  "ERICKA BERENICE OZUNA GARCIA",
+  "ESPERANZA BUCIO GONZALEZ",
+  "ESTEFANIA VILLALOBOS LOPEZ",
+  "FABIOLA TRISTAN VELASCO",
+  "FELIPE NAJERA FIGUEROA",
+  "FRANCISCO TIRADO ESPINDOLA",
+  "GABRIELA VARGAS NUÑEZ",
+  "GISSELA CAROLINA TORRES PEREZ",
+  "GLADIS JANETH DE LA CRUZ NUÑEZ",
+  "GLADYS LILIANA RUIS",
+  "IGNACIO GONZALEZ HERNANDEZ",
+  "JACIEL RUIZ",
+  "JENNIFER NAJAR MONICO",
+  "JOANA SOFIA LOPEZ CAMACHO",
+  "JOSE GABRIEL LOPEZ AGUILAR",
+  "JOSEFINA RIVAS NAVARRO",
+  "KARINA ELIZABETH TOVAR ENRIQUEZ",
+  "KIMBERLY JOSELINE LOPEZ LEDESMA",
+  "LAURA CRISTINA LOPEZ CAZARES",
+  "LESLI FERNANDA MORENO AYALA",
+  "LIZETH BERENICE GARROCHO RABELERO",
+  "LUIS FELIPE ALDAMA MOTOLINIA",
+  "LUIS GABRIEL DOMINGUEZ ARTEAGA",
+  "LUZ JUDITH MORENO",
+  "LUZ MARIA ENEIDA CORDOBA SANCHEZ",
+  "MANUEL ANTONIO RODRIGUEZ CORTES",
+  "MARGARITA ESTRADA MEJIA",
+  "MARGARITO BAUTISTA ORTIZ",
+  "MARIA ALEJANDRA QUIÑONES SEGURA",
+  "MARIA DE LA LUZ AIDEE FLORES OROZCO",
+  "MARIA DE LOS ANGELES CASTORENA CARDENAS",
+  "MARIA DE LOURDES HERNANDEZ RODRIGUEZ",
+  "MARIA DEL CARMEN VALLE MAGDALENO",
+  "MARIA DEL CARMEN VILLARREAL GOMEZ",
+  "MARIA DEL ROCIO CORDOVA AVALOS",
+  "MARIA GUADALUPE CHAVIRA REYES",
+  "MARIA ISABEL SANDOVAL SALAS",
+  "MARIA JULIA OCAMPO LUNA",
+  "MARIA PEREZ GUTIERREZ",
+  "MARIA SOFIA CORONA ARIAS",
+  "MARIA TERESA VAZQUEZ ALONSO",
+  "MARIO ALEJANDRO NAVA PRECIADO",
+  "MARISOL FLORES TOVAR",
+  "MARISOL RAMOS MACIEL",
+  "MARITZA ELIZABETH RAMIREZ ACUÑA",
+  "MARTHA CECILIA MUÑOZ",
+  "MARTHA ELVIRA DE LA TORRE GUTIERREZ",
+  "MARTHA PATRICIA CASTORENA CARDENAS",
+  "MARTHA PATRICIA GUZMAN AMAYA",
+  "MARTIN JAVIER DIAZ CASTILLO",
+  "MICHELE ZIHUALPILLI CASILLAS SANTAMARIA",
+  "MONICA GARCIA MONTES",
+  "NANCY MORA",
+  "NATHALIE ARELY CORTES MELENDEZ",
+  "NOELIA CONTRERAS QUEZADA",
+  "NOEMI YAZMIN LARA HERRERA",
+  "OFELIA GARCIA HERNANDEZ",
+  "OSWALDO ARTURO DE LEON SAUCEDO",
+  "PATRICIA ARACELI CARDENAS BUJANDA",
+  "PATRICIA TREJO CARRILLO",
+  "PEDRO ORTIZ MORA",
+  "RAMON ALEJANDRO LOPEZ",
+  "RAQUEL MARGARITA CASTILLO MARTINEZ",
+  "ROBERTO JOAQUIN EDUARDO CANO YAHUACA",
+  "ROCIO FAUSTINO LEON",
+  "ROGELIO SALAZAR GARCIA",
+  "ROSA AURA RIVERA ORTEGA",
+  "ROSA MARIA CAMACHO JIMENEZ",
+  "RUBEN BAUTISTA SANDOVAL",
+  "SALVADOR JAUREGUI HERNANDEZ",
+  "SANDRA ITZEL GUTIERREZ PEREZ",
+  "SERGIO IVAN GONZALEZ ROBLEDO",
+  "SILVIA AYALA LUNA",
+  "VERONICA ITZEL NAJERA RIVERA",
+  "VIOLETA ASUNCION GARCIA ARCINIEGA",
+  "ZAIRA YESENIA MONTES DE OCA DAVALOS"
+], 
+            comisiones: ["ADMIN SADER",
+"VISITA CASA POR CASA",
+"ARCHIVO SADER",
+"ATENCIÓN CID SADER ÁLAMO",
+"ATENCIÓN INAPAM SADER ÁLAMO",
+"BRIGADA SEGOB","CAPTURA",
+"OPERATIVO INCORPORACIÓN",
+"REVISIÓN EXPEDIENTES PALACIO FEDERAL",
+"SUPERVISOR SS",
+"ATENCIÓN CID CUYUTLÁN",
+"ENTREGA DE OPERATIVO",
+"ENTREGA TARJETAS EL REFUGIO",
+"CAPTURA TARJETAS",
+"ENTREGA DE TARJETAS CUYUTLÁN",
+"RUTA POSTRADOS Y DOMICILIO",
+"COORDINACIÓN REVISIÓN EXPEDIENTES PALACIO FEDERAL",
+"ENTREGA DE CASOS ESPECIALES PALACIO",
+"ARCHIVO CUYUTLÁN",
+"SUCURSAL BANCARIA CUYUTLÁN",
+"SUCURSAL BANCARIA TLAQUEPAQUE",
+"SUCURSAL BANCARIA SAN SEBASTIAN",
+"INCORPORACIÓN PCD",
+"LEEN",
+"APOYO ADMINISTRATIVO",
+"ENTREGA DE TARJETAS BIENPESCA"
+
+],
+            municipios: ["Tlajomulco De Zuñiga", "San Pedro Tlaquepaque"]
+        };
+
+        let coordenadas = { lat: null, lon: null };
+        let fotoBase64 = "";
+        let fechaAuto = "";
+        let horaAuto = "";
+
+        // Función de seguridad para bloquear el acceso
+        function accederComoAdmin() {
+            const intentoClave = prompt("Introduce la clave de Administrador para ver los cruces:");
+            
+            if (intentoClave === CLAVE_ADMIN_SECRETA) {
+                cambiarVista('vistaAdmin');
+            } else if (intentoClave !== null) {
+                alert("❌ Clave incorrecta. Acceso denegado.");
+            }
+        }
+
+        function cerrarSesionAdmin() {
+            cambiarVista('vistaUsuario');
+        }
+
+        function cambiarVista(idVista) {
+            document.getElementById('vistaUsuario').classList.add('hidden');
+            document.getElementById('vistaAdmin').classList.add('hidden');
+            document.getElementById(idVista).classList.remove('hidden');
+            if(idVista === 'vistaAdmin') cargarDatosAdmin();
+        }
+
+        function actualizarReloj() {
+            const ahora = new Date();
+            fechaAuto = ahora.toLocaleDateString('es-MX');
+            horaAuto = ahora.toLocaleTimeString('es-MX', { hour12: false });
+            document.getElementById('txtFecha').innerText = fechaAuto;
+            document.getElementById('txtHora').innerText = horaAuto;
+        }
+        setInterval(actualizarReloj, 1000);
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    coordenadas.lat = pos.coords.latitude;
+                    coordenadas.lon = pos.coords.longitude;
+                    document.getElementById('gpsStatus').innerText = `📍 GPS Listo: ${coordenadas.lat.toFixed(5)}, ${coordenadas.lon.toFixed(5)}`;
+                    document.getElementById('gpsStatus').style.color = "green";
+                },
+                () => { document.getElementById('gpsStatus').innerText = "❌ Enciende el GPS."; },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        function inicializarApp() {
+            const selectNombre = document.getElementById('selectNombre');
+            selectNombre.innerHTML = '<option value="">-- Selecciona --</option>';
+            BASE_DE_DATOS_LOCAL.personal.forEach(p => selectNombre.innerHTML += `<option value="${p}">${p}</option>`);
+
+            const selectComision = document.getElementById('selectComision');
+            selectComision.innerHTML = '<option value="">-- Selecciona --</option>';
+            BASE_DE_DATOS_LOCAL.comisiones.forEach(c => selectComision.innerHTML += `<option value="${c}">${c}</option>`);
+
+            const selectMunicipio = document.getElementById('selectMunicipio');
+            selectMunicipio.innerHTML = '<option value="">-- Selecciona --</option>';
+            BASE_DE_DATOS_LOCAL.municipios.forEach(m => selectMunicipio.innerHTML += `<option value="${m}">${m}</option>`);
+            
+            actualizarReloj();
+        }
+
+        document.getElementById('fotoInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 400;
+                    let width = img.width, height = img.height;
+                    if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    fotoBase64 = canvas.toDataURL('image/jpeg', 0.4); 
+                    document.getElementById('fotoPreview').src = fotoBase64;
+                    document.getElementById('previewContainer').classList.remove('hidden');
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('attendanceForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!coordenadas.lat) { alert("Se requieren datos GPS."); return; }
+            
+            const nuevoRegistro = {
+                nombre: document.getElementById('selectNombre').value,
+                comision: document.getElementById('selectComision').value,
+                municipio: document.getElementById('selectMunicipio').value,
+                fecha: fechaAuto, hora: horaAuto,
+                latitud: coordenadas.lat, longitud: coordenadas.lon
+            };
+
+            let asistenciasAlmacenadas = JSON.parse(localStorage.getItem('saci_asistencias')) || [];
+            asistenciasAlmacenadas.push(nuevoRegistro);
+            localStorage.setItem('saci_asistencias', JSON.stringify(asistenciasAlmacenadas));
+
+            alert(`📢 ¡ÉXITO!\nAsistencia guardada en el sistema para ${nuevoRegistro.nombre}.`);
+            location.reload();
+        });
+
+        function cargarDatosAdmin() {
+            const registros = JSON.parse(localStorage.getItem('saci_asistencias')) || [];
+            document.getElementById('numAsistencias').innerText = registros.length;
+            
+            const tabla = document.getElementById('tablaAsistencias');
+            tabla.innerHTML = "";
+            registros.reverse().forEach(r => {
+                tabla.innerHTML += `<div class="p-2 bg-white rounded border border-gray-200">
+                    <strong>${r.nombre}</strong> - ${r.municipio}<br>
+                    <span class="text-gray-400">${r.fecha} a las ${r.hora} | GPS: ${r.latitud}, ${r.longitud}</span>
+                </div>`;
+            });
+            ejecutarCruce();
+        }
+
+        function ejecutarCruce() {
+            const registros = JSON.parse(localStorage.getItem('saci_asistencias')) || [];
+            const hoy = new Date().toLocaleDateString('es-MX');
+            
+            const asistieronHoy = registros.filter(r => r.fecha === hoy).map(r => r.nombre);
+            const omisos = BASE_DE_DATOS_LOCAL.personal.filter(p => !asistieronHoy.includes(p));
+            
+            document.getElementById('numOmisos').innerText = omisos.length;
+            const listaU = document.getElementById('listaOmisos');
+            listaU.innerHTML = "";
+            
+            if(omisos.length === 0) {
+                listaU.innerHTML = "<li>🎉 ¡Todo el personal ha reportado asistencia hoy!</li>";
+            } else {
+                omisos.forEach(o => { listaU.innerHTML += `<li>${o}</li>`; });
+            }
+        }
+
+        function exportarExcel() {
+            const registros = JSON.parse(localStorage.getItem('saci_asistencias')) || [];
+            if(registros.length === 0) { alert("No hay datos para exportar."); return; }
+
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "Nombre,Comision,Municipio,Fecha,Hora,Latitud,Longitud\n";
+
+            registros.forEach(r => {
+                csvContent += `"${r.nombre}","${r.comision}","${r.municipio}","${r.fecha}","${r.hora}","${r.latitud}","${r.longitud}"\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Reporte_Asistencias_${new Date().toLocaleDateString('es-MX')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        window.onload = inicializarApp;
+    </script>
+</body>
+</html>
