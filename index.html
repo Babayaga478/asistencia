@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistencia R12 - Sistema de Control de Asistencia</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Leaflet CSS y JS (Mapa) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #mapa { height: 350px; width: 100%; border-radius: 12px; }
+        .dropdown-content { max-height: 200px; overflow-y: auto; display: none; }
+        .dropdown-content.show { display: block; }
+    </style>
+</head>
+<body class="p-4 max-w-md mx-auto bg-gray-100 font-sans">
+
+    <!-- INTERFAZ DEL ELEMENTO (MÓVIL) -->
+    <div id="vistaUsuario" class="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mt-4">
+        <div class="flex justify-between items-center mb-2">
+            <h1 class="text-2xl font-bold text-[#691C32]">Asistencia R12</h1>
+            <button onclick="solicitarAccesoPanel()" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-medium">Ingresar</button>
+        </div>
+        <p class="text-xs text-gray-500 mb-6">Registro Oficial Centralizado</p>
+
+        <form id="attendanceForm" class="space-y-4" onsubmit="procesarRegistro(event)">
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">ID Personal *</label>
+                    <input type="text" id="idPersonal" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">Nómina *</label>
+                    <select id="selectNomina" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required>
+                        <option value="">Selecciona</option>
+                        <option value="Servidor de la Nación">Servidor de la Nación</option>
+                        <option value="UBA">Servidor de la Nación de Programas</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- BUSCADOR + DESPLEGABLE DE NOMBRES -->
+            <div class="relative">
+                <label class="block text-xs font-bold text-gray-700 mb-1">Nombre*</label>
+                <input type="text" id="inputNombre" placeholder="🔍 Escribe para buscar o toca la flecha..." class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm pr-10" autocomplete="off" required onclick="toggleDropdown('dropNombre')" oninput="filtrarDropdown('inputNombre', 'dropNombre')">
+                <div class="absolute right-3 top-9 text-gray-400 pointer-events-none">▼</div>
+                <div id="dropNombre" class="dropdown-content absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-300 rounded-xl shadow-lg"></div>
+            </div>
+
+            <!-- BUSCADOR + DESPLEGABLE DE COMISIONES -->
+            <div class="relative">
+                <label class="block text-xs font-bold text-gray-700 mb-1">Comisión de Trabajo *</label>
+                <input type="text" id="inputComision" placeholder="🔍 Escribe para buscar o toca la flecha..." class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm pr-10" autocomplete="off" required onclick="toggleDropdown('dropComision')" oninput="filtrarDropdown('inputComision', 'dropComision')">
+                <div class="absolute right-3 top-9 text-gray-400 pointer-events-none">▼</div>
+                <div id="dropComision" class="dropdown-content absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-300 rounded-xl shadow-lg"></div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-1">Municipio*</label>
+                <select id="selectMunicipio" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required></select>
+            </div>
+
+            <!-- SECCIONES MODULARES (CAMPOS DE TEXTO ABIERTO) -->
+            <div id="contenedorZona" class="hidden">
+                <label class="block text-xs font-bold text-gray-700 mb-1">Zona de Trabajo *</label>
+                <input type="text" id="inputZona" placeholder="Escribe la zona asignada..." class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm">
+            </div>
+
+            <div id="contenedorArea" class="hidden">
+                <label class="block text-xs font-bold text-gray-700 mb-1">Área*</label>
+                <input type="text" id="inputArea" placeholder="Escribe el área correspondiente..." class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm">
+            </div>
+
+            <!-- Módulo de Justificantes Obligatorios -->
+            <div class="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="checkJustificante" class="w-4 h-4 text-amber-600 rounded border-gray-300" onchange="toggleJustificante()">
+                    <label for="checkJustificante" class="text-xs font-bold text-amber-800 cursor-pointer">¿Reportar Incapacidad o Permiso Oficial?</label>
+                </div>
+                <div id="camposJustificante" class="hidden">
+                    <label class="block text-xs font-semibold text-amber-900 mb-1">Motivo de la Incidencia *</label>
+                    <select id="selectMotivo" class="w-full p-2.5 bg-white border border-amber-300 rounded-lg text-sm">
+                        <option value="">-- Seleccione --</option>
+                        <option value="Incapacidad Médica">Incapacidad Médica</option>
+                        <option value="Permiso">Permiso</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200 text-center text-xs font-semibold">
+                <div>Fecha: <span id="txtFecha">—</span></div>
+                <div>Hora: <span id="txtHora">—</span></div>
+            </div>
+
+            <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50">
+                <label class="block cursor-pointer">
+                    <span id="labelFoto" class="text-indigo-600 font-medium text-xs block mb-2">📸 Capturar Foto o Subir Documento Justificante *</span>
+                    <input type="file" id="fotoInput" accept="image/*,application/pdf" class="block w-full text-xs text-gray-500" required>
+                </label>
+                <canvas id="canvasMarcaAgua" class="hidden"></canvas>
+            </div>
+
+            <div id="gpsStatus" class="text-[11px] text-center text-red-600 font-mono bg-red-50 p-2 rounded-lg">
+                ⚠️ Esperando Ubicación GPS Institucional Obligatoria...
+            </div>
+
+            <button id="btnEnviar" type="submit" class="w-full bg-[#691C32] text-white p-3.5 rounded-xl font-bold shadow-md hover:bg-[#4c1222] disabled:opacity-50">
+                Enviar Registro al Concentrado
+            </button>
+        </form>
+    </div>
+
+    <!-- PANEL MAESTRO (ADMIN PANEL) -->
+    <div id="vistaAdmin" class="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mt-4 hidden">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h2 class="text-base font-bold text-gray-800">Panel Admin (Maestro)</h2>
+                <span class="text-[9px] bg-red-100 text-red-800 uppercase font-bold px-2 py-0.5 rounded">Nube Sincronizada</span>
+            </div>
+            <button onclick="cerrarPaneles()" class="text-xs bg-gray-600 text-white px-3 py-1 rounded-lg">Salir</button>
+        </div>
+
+        <!-- CONTROL DE VISIBILIDAD OPCIONAL -->
+        <div class="bg-blue-50 p-3 rounded-xl border border-blue-200 mb-3 space-y-2 text-xs">
+            <span class="font-bold text-blue-900 block">⚙️ Visibilidad de Apartados Opcionales:</span>
+            <div class="flex items-center justify-between">
+                <label class="font-medium text-gray-700">Habilitar Apartado "Zona de Trabajo"</label>
+                <input type="checkbox" id="switchZona" class="w-4 h-4 text-blue-600" onchange="actualizarVisibilidadModulos()">
+            </div>
+            <div class="flex items-center justify-between">
+                <label class="font-medium text-gray-700">Habilitar Apartado "Área Institucional"</label>
+                <input type="checkbox" id="switchArea" class="w-4 h-4 text-blue-600" onchange="actualizarVisibilidadModulos()">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mb-2">
+            <button onclick="exportarExcelUnificado()" class="bg-green-700 text-white p-2.5 rounded-xl text-xs font-bold shadow">📊 Descargar Único Excel</button>
+            <button onclick="actualizarPanelesYMapa()" class="bg-indigo-600 text-white p-2.5 rounded-xl text-xs font-bold shadow">🔄 Recargar Nube</button>
+        </div>
+
+        <div class="bg-gray-100 p-3 rounded-xl border border-gray-300 mb-3 space-y-2">
+            <span class="text-xs font-bold text-gray-700 block">🔧 Mantenimiento de Horarios Operativos:</span>
+            <div class="flex gap-2">
+                <input type="time" id="mantenimientoHoraInicio" class="bg-white border p-1 rounded text-xs w-full" value="07:00">
+                <input type="time" id="mantenimientoHoraFin" class="bg-white border p-1 rounded text-xs w-full" value="10:01">
+                <button onclick="guardarMantenimientoHoras()" class="bg-amber-600 text-white px-2 py-1 text-xs rounded font-bold">Guardar</button>
+            </div>
+        </div>
+
+        <div class="mb-4"><div id="mapa"></div></div>
+
+        <div class="space-y-4">
+            <div class="bg-red-50 p-4 rounded-xl border border-red-200">
+                <h3 class="text-xs font-bold text-red-800 mb-2">⚠️ OMISOS HOY (<span id="numOmisos">0</span>)</h3>
+                <ul id="listaOmisos" class="text-xs text-red-700 list-disc pl-4 space-y-1 max-h-40 overflow-y-auto"></ul>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <h3 class="text-xs font-bold text-gray-800 mb-2">📋 Listado de Registros en la Nube (Historial)</h3>
+                <div id="tablaAsistencias" class="text-[10px] text-gray-600 space-y-2 max-h-40 overflow-y-auto">Cargando datos...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL DE AUDITORÍA -->
+    <div id="vistaAuditoria" class="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mt-4 hidden">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h2 class="text-base font-bold text-gray-800">Panel Auditoría</h2>
+                <span class="text-[9px] bg-blue-100 text-blue-800 uppercase font-bold px-2 py-0.5 rounded">Solo Lectura</span>
+            </div>
+            <button onclick="cerrarPaneles()" class="text-xs bg-gray-600 text-white px-3 py-1 rounded-lg">Salir</button>
+        </div>
+        <button onclick="exportarExcelUnificado()" class="w-full bg-green-700 text-white p-2.5 rounded-xl text-xs font-bold shadow mb-4">📊 Descargar Único Excel Compartido</button>
+        <div id="mapaAuditoriaContainer" class="mb-4"><div id="mapaAuditoria" style="height: 250px; width: 100%; border-radius: 12px;"></div></div>
+        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <h3 class="text-xs font-bold text-gray-700 mb-2">Omisos Identificados Hoy (<span id="numOmisosAuditoria">0</span>)</h3>
+            <ul id="listaOmisosAuditoria" class="text-xs text-red-600 list-disc pl-4 space-y-1 max-h-40 overflow-y-auto"></ul>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURACIÓN DE CONEXIÓN CON TU GOOGLE SHEET
+        // REEMPLAZA EL ENLACE DE ABAJO POR EL QUE COPIASTE DE GOOGLE APPS SCRIPT
+        const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbzmghQOSyj6RvX2r6HB-hM2Nb6vwJ9G3lhXL154blP3TWnIVs38ioq46ONifkAC04XvMA/exec";
+        // ==========================================
+
+        const CLAVE_MAESTRA = "1827";
+        const CLAVE_AUDITORIA = "4321";
+
+        const BASE_DATOS = {
+            personal: [
+                "AGUSTÍN BUENAVENTURA GISPERT BURGOS", "ALEJANDRA CARRILLO DELGADO", "ALEJANDRA JUDITH TRIGUEROS VARGAS",
+                "ALEJANDRINA MORA GARCÍA", "ALICIA MARTINEZ MARIN", "ALMA ROSA FLORES MONTES", "ALMA ROSA VALENTIN COSINO",
+                "ANA MARIA SOLANO PAREDES", "BEATRIZ HERNÁNDEZ NIETO", "BLANCA ENEYDA ESTRADA AGUILAR", "BLANCA ESTELA ARRIAGA ROJAS",
+                "BRISA MARÍA VILLASEÑOR SOSA", "CARLOS ALBERTO PEREZ CARBAJAL", "CESAR AGUIRRE JUAREZ", "CINTHYA VERONICA CALLEROS GUTIERREZ",
+                "CLAUDIA LILIANA INFANTE PAREDES", "CRISTÓBAL CORTES GONZALEZ", "DANIEL GARCIA BAUTISTA", "DANIELA ÁVALOS VÁZQUEZ",
+                "DANIELA JACQUELINE SALAZAR SANCHEZ", "DOLORES JANETH DE LA CRUZ GARCIA", "EDITH FLORES HUERTA", "EDUARDO RAUL HERNANDEZ HERNANDEZ",
+                "ENRIQUETA NOEMI GUERRERO OCHOA", "ERICKA BERENICE OZUNA GARCÍA", "ESPERANZA BUCIO GONZALEZ", "ESTEFANIA VILLALOBOS LOPEZ",
+                "FABIOLA TRISTÁN VELASCO", "FELIPE NAJERA FIGUEROA", "FRANCISCO TIRADO ESPINDOLA", "GABRIELA VARGAS NUÑEZ",
+                "GISSELA CAROLINA TORRES PÉREZ", "GLADIS JANETH DE LA CRUZ NUÑEZ", "GLADYS LILIANA RUIZ VALENZUELA", "IGNACIO GONZALEZ HERNANDEZ",
+                "JACIEL RUIZ VELASCO SEGOVIANO", "JENNIFER NAJAR MONICO", "JOANA SOFIA LOPEZ CAMACHO", "JOSE GABRIEL LÓPEZ AGUILAR",
+                "JOSEFINA RIVAS NAVARRO", "JUAN MANUAL HERNÁNDEZ ENRIQUEZ", "KARINA ELIZABETH TOVAR ENRIQUEZ", "KIMBERLY JOSELINE LOPEZ LEDESMA",
+                "LAURA CRISTINA LOPEZ CAZARES", "LESLI FERNANDA MORENO AYALA", "LIZETH BERENICE GARROCHO RAVELERO", "LUIS FELIPE ALDAMA MOTOLINIA",
+                "LUIS GABRIEL DOMINGUEZ ARTEAGA", "LUZ MARIA ENEIDA CORDOBA SANCHEZ", "MANUEL ANTONIO RODRIGUEZ CORTES", "MARGARITA ESTRADA MEJIA",
+                "MARGARITO BAUTISTA ORTIZ", "MARIA ALEJANDRA QUIÑONES SEGURA", "MARIA DE LA LUZ AIDEE FLORES OROZCO", "MARIA DE LOS ANGELES CASTORENA CARDENAS",
+                "MARIA DE LOURDES HERNANDEZ RODRIGUEZ", "MARIA DEL CARMEN VALLE MAGDALENO", "MARÍA DEL CARMEN VILLARREAL GOMEZ", "MARIA DEL ROCIO CORDOVA AVALOS",
+                "MARIA GUADALUPE CHAVIRA REYES", "MARÍA ISABEL SANDOVAL SALAS", "MARIA JULIA OCAMPO LUNA", "MARIA PÉREZ GUTIÉRREZ",
+                "MARIA SOFIA CORONA ARIAS", "MARIA TERESA VAZQUEZ ALONSO", "MARIO ALEJANDRO NAVA PRECIADO", "MARISOL FLORES TOVAR",
+                "MARISOL RAMOS MACIEL", "MARITZA ELIZABETH RAMIREZ ACUÑA", "MARTHA CECILIA MUÑOZ FLORES", "MARTHA ELVIRA DE LA TORRE GUTIERREZ",
+                "MARTHA PATRICIA CASTORENA CARDENAS", "MARTHA PATRICIA GUZMAN AMAYA", "MARTIN JAVIER DISS CASTILLO", "MICHELLE ZIUALPILLI CASILLAS SANTAMARIA",
+                "MONICA GARCIA MONTES", "NANCY MORA GARCIA", "NATHALIE ARELY CORTES MELENDEZ", "NOELIA CONTRERAS QUEZADA", "NOEMI YAZMIN LARA HERRERA",
+                "OFELIA GARCÍA HERNÁNDEZ", "OSWALDO ARTURO DE LEÓN SAUCEDO", "PATRICIA ARACELI CARDENAS BUJANDA", "PATRICIA TREJO CARRILLO",
+                "PEDRO ORTIZ MORA", "RAMÓN ALEJANDRO LÓPEZ CALIXTO", "RAQUEL MARGARITA CASTILLO MARTINEZ", "ROBERTO JOAQUÍN EDUARDO CANO YAHUACA",
+                "ROCIO FAUSTINO LEÓN", "ROGELIO SALAZAR GARCÍA", "ROSA AURA RIVER ORTEGA", "ROSA MARIA CAMACHO JIMENEZ", "RUBÉN BAUTISTA SANDOVAL",
+                "SALVADOR JAUREGUI HERNANDEZ", "SANDRA ITZEL GUTIERREZ PEREZ", "SERGIO IVAN GONZALEZ ROBLEDO", "SILVIA AYALA LUNA",
+                "VERONICA ITZEL NAJERA RIVERA", "VIOLETA ASUNCIÓN GARCÍA ARCINIEGA", "ZAIRA YESENIA MONTES DE OCA DAVALOS"
+            ],
+            comisiones: ["ADMIN SADER",
+"VISITA CASA POR CASA",
+"ARCHIVO SADER",
+"ATENCIÓN CID SADER ÁLAMO",
+"ATENCIÓN INAPAM SADER ÁLAMO",
+"BRIGADA SEGOB","CAPTURA",
+"OPERATIVO INCORPORACIÓN",
+"REVISIÓN EXPEDIENTES PALACIO FEDERAL",
+"SUPERVISOR SS",
+"ATENCIÓN CID CUYUTLÁN",
+"ENTREGA DE OPERATIVO",
+"ENTREGA TARJETAS EL REFUGIO",
+"CAPTURA TARJETAS",
+"ENTREGA DE TARJETAS CUYUTLÁN",
+"RUTA POSTRADOS Y DOMICILIO",
+"COORDINACIÓN REVISIÓN EXPEDIENTES PALACIO FEDERAL",
+"ENTREGA DE CASOS ESPECIALES PALACIO",
+"ARCHIVO CUYUTLÁN",
+"SUCURSAL BANCARIA CUYUTLÁN",
+"SUCURSAL BANCARIA TLAQUEPAQUE",
+"SUCURSAL BANCARIA SAN SEBASTIAN",
+"INCORPORACIÓN PCD",
+"LEEN",
+"APOYO ADMINISTRATIVO",
+"ENTREGA DE TARJETAS BIENPESCA"],
+            municipios: ["San Pedro Tlaquepaque","Tlajomulco de Zuñiga"]
+        };
+
+        let gpsCoords = { lat: null, lon: null };
+        let mapaL = null; let mapaAuditoria = null;
+        let marcadoresM = []; let marcadoresA = [];
+        let fotoConMarcaAgua = "";
+        let registrosNube = []; // Almacén dinámico del fetch
+
+        function inicializarDropdowns() {
+            llenarOpcionesDropdown('dropNombre', BASE_DATOS.personal, 'inputNombre');
+            llenarOpcionesDropdown('dropComision', BASE_DATOS.comisiones, 'inputComision');
+        }
+
+        function llenarOpcionesDropdown(idContenedor, arreglo, idInput) {
+            const contenedor = document.getElementById(idContenedor);
+            contenedor.innerHTML = '';
+            arreglo.forEach(item => {
+                const div = document.createElement('div');
+                div.className = "p-3 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer border-b border-gray-100";
+                div.innerText = item;
+                div.onclick = function() {
+                    document.getElementById(idInput).value = item;
+                    cerrarTodosDropdowns();
+                };
+                contenedor.appendChild(div);
+            });
+        }
+
+        function toggleDropdown(id) {
+            const elemento = document.getElementById(id);
+            const estaAbierto = elemento.classList.contains('show');
+            cerrarTodosDropdowns();
+            if (!estaAbierto) elemento.classList.add('show');
+        }
+
+        function filtrarDropdown(idInput, idDrop) {
+            const filtro = document.getElementById(idInput).value.toUpperCase();
+            const contenedor = document.getElementById(idDrop);
+            const opciones = contenedor.getElementsByTagName('div');
+            contenedor.classList.add('show');
+            
+            for (let i = 0; i < opciones.length; i++) {
+                let txtValue = opciones[i].textContent || opciones[i].innerText;
+                if (txtValue.toUpperCase().indexOf(filtro) > -1) {
+                    opciones[i].style.display = "";
+                } else {
+                    opciones[i].style.display = "none";
+                }
+            }
+        }
+
+        function cerrarTodosDropdowns() {
+            document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#inputNombre') && !e.target.closest('#dropNombre') &&
+                !e.target.closest('#inputComision') && !e.target.closest('#dropComision')) {
+                cerrarTodosDropdowns();
+            }
+        });
+
+        function actualizarVisibilidadModulos() {
+            const zonaActiva = document.getElementById('switchZona').checked;
+            const areaActiva = document.getElementById('switchArea').checked;
+
+            localStorage.setItem('saci_modulo_zona', zonaActiva);
+            localStorage.setItem('saci_modulo_area', areaActiva);
+
+            document.getElementById('contenedorZona').classList.toggle('hidden', !zonaActiva);
+            document.getElementById('inputZona').required = zonaActiva;
+
+            document.getElementById('contenedorArea').classList.toggle('hidden', !areaActiva);
+            document.getElementById('inputArea').required = areaActiva;
+        }
+
+        function cargarConfiguracionModulos() {
+            const zonaActiva = localStorage.getItem('saci_modulo_zona') === 'true';
+            const areaActiva = localStorage.getItem('saci_modulo_area') === 'true';
+
+            document.getElementById('switchZona').checked = zonaActiva;
+            document.getElementById('switchArea').checked = areaActiva;
+
+            actualizarVisibilidadModulos();
+        }
+
+        function toggleJustificante() {
+            const activo = document.getElementById('checkJustificante').checked;
+            document.getElementById('camposJustificante').classList.toggle('hidden', !activo);
+            document.getElementById('selectMotivo').required = activo;
+        }
+
+        function solicitarAccesoPanel() {
+            const pass = prompt("Contraseña de Seguridad:");
+            if(pass === CLAVE_MAESTRA) {
+                document.getElementById('vistaUsuario').classList.add('hidden');
+                document.getElementById('vistaAdmin').classList.remove('hidden');
+                setTimeout(() => { if(!mapaL) { mapaL = L.map('mapa').setView([20.635, -103.313], 11); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaL); } }, 200);
+                actualizarPanelesYMapa();
+            } else if(pass === CLAVE_AUDITORIA) {
+                document.getElementById('vistaUsuario').classList.add('hidden');
+                document.getElementById('vistaAuditoria').classList.remove('hidden');
+                setTimeout(() => { if(!mapaAuditoria) { mapaAuditoria = L.map('mapaAuditoria').setView([20.635, -103.313], 11); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaAuditoria); } }, 200);
+                actualizarPanelesYMapa();
+            } else if(pass !== null) { alert("Acceso Denegado."); }
+        }
+
+        function cerrarPaneles() {
+            document.getElementById('vistaAdmin').classList.add('hidden');
+            document.getElementById('vistaAuditoria').classList.add('hidden');
+            document.getElementById('vistaUsuario').classList.remove('hidden');
+        }
+
+        function guardarMantenimientoHoras() {
+            const inicio = document.getElementById('mantenimientoHoraInicio').value;
+            const fin = document.getElementById('mantenimientoHoraFin').value;
+            localStorage.setItem('saci_config_inicio', inicio);
+            localStorage.setItem('saci_config_fin', fin);
+            alert(`⚙️ Horario operativo configurado de ${inicio} a ${fin}`);
+        }
+
+        document.getElementById('fotoInput').addEventListener('change', function(e) {
+            const file = e.target.files[0]; if(!file) return;
+            const esJustificante = document.getElementById('checkJustificante').checked;
+            if (esJustificante && file.type === "application/pdf") {
+                fotoConMarcaAgua = "DOCUMENTO_PDF_JUSTIFICANTE_ADJUNTADO"; return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.getElementById('canvasMarcaAgua');
+                    canvas.width = 600; canvas.height = 450;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, 600, 450);
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(0, 390, 600, 600);
+                    ctx.fillStyle = "#ffffff"; ctx.font = "bold 12px monospace";
+                    const fStr = new Date().toLocaleDateString('es-MX');
+                    const hStr = new Date().toLocaleTimeString('es-MX', { hour12: false });
+                    const gpsStr = gpsCoords.lat ? `${gpsCoords.lat.toFixed(5)}, ${gpsCoords.lon.toFixed(5)}` : "SIN GPS";
+                    ctx.fillText(`FECHA: ${fStr} | HORA: ${hStr}`, 15, 415);
+                    ctx.fillText(`COORDENADAS: ${gpsStr} | SEGURIDAD SACI`, 15, 435);
+                    fotoConMarcaAgua = canvas.toDataURL('image/jpeg', 0.5);
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // ENVIAR REGISTRO DIRECTO A GOOGLE SHEETS EN TIEMPO REAL
+        function procesarRegistro(e) {
+            e.preventDefault();
+            
+            if (URL_GOOGLE_SCRIPT === "PEGA_AQUÍ_TU_URL_DE_APPS_SCRIPT") {
+                alert("⚠️ Error de configuración: El administrador aún no ha configurado la URL del Google Script.");
+                return;
+            }
+
+            const ahora = new Date(); 
+            const hoyStr = ahora.toLocaleDateString('es-MX');
+            const esJustificante = document.getElementById('checkJustificante').checked;
+
+            const nombreSeleccionado = document.getElementById('inputNombre').value.trim();
+            const comisionSeleccionada = document.getElementById('inputComision').value.trim();
+            const zonaEscrita = document.getElementById('inputZona').value.trim();
+            const areaEscrita = document.getElementById('inputArea').value.trim();
+
+            if(!gpsCoords.lat || !gpsCoords.lon) { alert("❌ GPS Mandatorio ausente."); return; }
+            if(!BASE_DATOS.personal.includes(nombreSeleccionado)) { alert("❌ Nombre inválido o no seleccionado de la lista."); return; }
+            if(!BASE_DATOS.comisiones.includes(comisionSeleccionada)) { alert("❌ Comisión inválida o no seleccionada de la lista."); return; }
+
+            if(!esJustificante) {
+                const confInicio = localStorage.getItem('saci_config_inicio') || "07:00";
+                const confFin = localStorage.getItem('saci_config_fin') || "10:01";
+                const horaActual = ahora.toLocaleTimeString('es-MX', { hour12: false });
+                if(horaActual < confInicio || horaActual > confFin) {
+                    alert(`❌ FUERA DE HORARIO: La carga regular está limitada de ${confInicio} a ${confFin}.`); return;
+                }
+            } else if(fotoConMarcaAgua === "") {
+                alert("❌ AUDITORÍA: Adjunte archivo oficial para inasistencia justificada."); return;
+            }
+
+            // Deshabilitar botón de envío para evitar doble clic
+            const btn = document.getElementById('btnEnviar');
+            btn.disabled = true;
+            btn.innerText = "Sincronizando con Servidor Google...";
+
+            const nuevoRegistro = {
+                folio: `SACI-${ahora.getDate()}${ahora.getMonth()+1}-${Math.floor(1000+Math.random()*9000)}`,
+                id: document.getElementById('idPersonal').value,
+                nomina: document.getElementById('selectNomina').value,
+                nombre: nombreSeleccionado,
+                comision: comisionSeleccionada,
+                municipio: document.getElementById('selectMunicipio').value,
+                zona: zonaEscrita || "N/A",
+                area: areaEscrita || "N/A",
+                fecha: hoyStr, 
+                hora: ahora.toLocaleTimeString('es-MX', { hour12: false }),
+                estatus: esJustificante ? document.getElementById('selectMotivo').value : "ASISTENCIA REGULAR",
+                lat: gpsCoords.lat, 
+                lon: gpsCoords.lon
+            };
+
+            // Enviar datos vía POST al Apps Script
+            fetch(URL_GOOGLE_SCRIPT, {
+                method: "POST",
+                mode: "no-cors", // Evita bloqueos de seguridad de navegador cruzado
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(nuevoRegistro)
+            })
+            .then(() => {
+                alert("📢 Registro sincronizado exitosamente en la nube de Google Sheets.");
+                location.reload();
+            })
+            .catch(err => {
+                alert("❌ Error de comunicación con la base de datos.");
+                console.error(err);
+                btn.disabled = false;
+                btn.innerText = "Enviar Registro al Concentrado";
+            });
+        }
+
+        // DESCARGAR Y SINCRONIZAR DESDE GOOGLE SHEETS EN VIVO
+        function actualizarPanelesYMapa() {
+            if (URL_GOOGLE_SCRIPT === "PEGA_AQUÍ_TU_URL_DE_APPS_SCRIPT") {
+                document.getElementById('tablaAsistencias').innerHTML = "⚠️ Falta configurar la URL de Google Script para leer los datos.";
+                return;
+            }
+
+            document.getElementById('tablaAsistencias').innerHTML = "🔄 Sincronizando datos desde la nube...";
+
+            fetch(URL_GOOGLE_SCRIPT)
+            .then(res => res.json())
+            .then(data => {
+                registrosNube = data;
+                renderizarDatosSincronizados();
+            })
+            .catch(err => {
+                document.getElementById('tablaAsistencias').innerHTML = "❌ Error al descargar datos de la nube.";
+                console.error(err);
+            });
+        }
+
+        function renderizarDatosSincronizados() {
+            const hoy = new Date().toLocaleDateString('es-MX');
+            marcadoresM.forEach(m => mapaL && mapaL.removeLayer(m)); marcadoresM = [];
+            marcadoresA.forEach(m => mapaAuditoria && mapaAuditoria.removeLayer(m)); marcadoresA = [];
+            
+            const tabla = document.getElementById('tablaAsistencias'); 
+            if(tabla) tabla.innerHTML = "";
+
+            if (registrosNube.length === 0) {
+                if(tabla) tabla.innerHTML = "<div class='text-center p-4 text-gray-400'>Aún no hay registros en la base de datos.</div>";
+            }
+
+            registrosNube.slice().reverse().forEach(r => {
+                if(tabla) {
+                    tabla.innerHTML += `<div class="p-2 bg-white rounded border border-gray-200 mb-1 text-[10px]">
+                        <strong>${r.nombre}</strong> - <span class="text-indigo-600">${r.estatus}</span><br>
+                        <span class="text-gray-400">Zona: ${r.zona} | Área: ${r.area} | Marcaje: ${r.fecha} ${r.hora}</span>
+                    </div>`;
+                }
+                
+                const col = r.estatus === "ASISTENCIA REGULAR" ? "green" : "orange";
+                if(r.lat && r.lon) {
+                    const latNum = parseFloat(r.lat);
+                    const lonNum = parseFloat(r.lon);
+                    if(mapaL) marcadoresM.push(L.circleMarker([latNum, lonNum], {radius:7, fillColor:col, color:"#fff", fillOpacity:0.8}).addTo(mapaL).bindPopup(`<b>${r.nombre}</b><br>Estatus: ${r.estatus}<br>Fecha: ${r.fecha} ${r.hora}`));
+                    if(mapaAuditoria) marcadoresA.push(L.circleMarker([latNum, lonNum], {radius:7, fillColor:col, color:"#fff", fillOpacity:0.8}).addTo(mapaAuditoria).bindPopup(`<b>${r.nombre}</b><br>Estatus: ${r.estatus}`));
+                }
+            });
+
+            // Control de omisos en base a datos reales del servidor
+            const asignadosHoy = registrosNube.filter(r => r.fecha === hoy).map(r => r.nombre);
+            const omisos = BASE_DATOS.personal.filter(p => !asignadosHoy.includes(p));
+            
+            document.getElementById('numOmisos').innerText = omisos.length;
+            document.getElementById('numOmisosAuditoria').innerText = omisos.length;
+            
+            const listaM = document.getElementById('listaOmisos'); listaM.innerHTML = "";
+            const listaA = document.getElementById('listaOmisosAuditoria'); listaA.innerHTML = "";
+            
+            if(omisos.length === 0) {
+                listaM.innerHTML = "<li>🎉 Plantilla completa.</li>"; 
+                listaA.innerHTML = "<li>🎉 Plantilla completa.</li>";
+            } else {
+                omisos.forEach(o => { 
+                    listaM.innerHTML += `<li>${o}</li>`; 
+                    listaA.innerHTML += `<li>${o}</li>`; 
+                });
+            }
+        }
+
+        function exportarExcelUnificado() {
+            if(registrosNube.length === 0) { 
+                alert("Sincronice datos antes de exportar o revise si la base está vacía."); 
+                return; 
+            }
+            let csv = "data:text/csv;charset=utf-8,\uFEFF";
+            csv += "Folio SACI,ID Elemento,Régimen Nómina,Nombre del Servidor,Comisión Asignada,Municipio,Zona,Área,Fecha Registro,Hora Carga,Estatus Auditoría,Latitud GPS,Longitud GPS\n";
+            registrosNube.forEach(r => {
+                csv += `"${r.folio}","${r.id}","${r.nomina}","${r.nombre}","${r.comision}","${r.municipio}","${r.zona}","${r.area}","${r.fecha}","${r.hora}","${r.estatus}","${r.lat}","${r.lon}"\n`;
+            });
+            const link = document.createElement("a"); 
+            link.setAttribute("href", encodeURI(csv)); 
+            link.setAttribute("download", "AUDITORIA_CONCENTRADO_GENERAL.csv");
+            document.body.appendChild(link); 
+            link.click(); 
+            document.body.removeChild(link);
+        }
+
+        window.onload = function() {
+            const ms = document.getElementById('selectMunicipio'); ms.innerHTML = '<option value="">Selecciona Municipio</option>';
+            BASE_DATOS.municipios.forEach(m => ms.innerHTML += `<option value="${m}">${m}</option>`);
+
+            inicializarDropdowns();
+            cargarConfiguracionModulos();
+
+            setInterval(() => {
+                const d = new Date();
+                document.getElementById('txtFecha').innerText = d.toLocaleDateString('es-MX');
+                document.getElementById('txtHora').innerText = d.toLocaleTimeString('es-MX', {hour12:false});
+            }, 1000);
+
+            if(navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    gpsCoords.lat = pos.coords.latitude; gpsCoords.lon = pos.coords.longitude;
+                    const st = document.getElementById('gpsStatus');
+                    st.innerText = "📍 Ubicación Geográfica Asegurada Exitosamente";
+                    st.className = "text-[11px] text-center text-green-700 font-mono bg-green-50 p-2 rounded-lg";
+                }, () => { alert("Active el GPS."); }, {enableHighAccuracy:true});
+            }
+        };
+    </script>
+</body>
+</html>
