@@ -3,459 +3,454 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASISTENCIA R12- Sistema de Asistencia</title>
+    <title>SACI - Control Institucional Centralizado</title>
+    <!-- Tailwind CSS para Diseño -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Leaflet CSS y JS para el Mapa de Ubicaciones -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        .suggestions-box { max-height: 150px; overflow-y: auto; z-index: 50; }
+        #mapa { height: 300px; width: 100%; border-radius: 12px; }
+    </style>
 </head>
-<body class="p-4 max-w-md mx-auto bg-gray-100">
+<body class="p-4 max-w-md mx-auto bg-gray-100 font-sans">
 
-    <!-- SECCIÓN 1: INTERFAZ DEL ELEMENTO (MÓVIL) -->
+    <!-- INTERFAZ DEL ELEMENTO (MÓVIL) -->
     <div id="vistaUsuario" class="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mt-4">
         <div class="flex justify-between items-center mb-2">
-            <h1 class="text-2xl font-bold text-[#691C32]">ASISTENCIA R12</h1>
-            <button onclick="accederComoAdmin()" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-medium">Panel Admin</button>
+            <h1 class="text-2xl font-bold text-[#691C32]">SACI</h1>
+            <button onclick="solicitarAccesoAdmin()" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-medium">Acceso Admin</button>
         </div>
-        <p class="text-xs text-gray-500 mb-6">REGISTRO DE ASISTENCIAS</p>
+        <p class="text-xs text-gray-500 mb-6">Registro Obligatorio de Asistencia e Incidencias</p>
 
-        <form id="attendanceForm" class="space-y-4">
+        <form id="attendanceForm" class="space-y-4" onsubmit="procesarFormulario(event)">
             <div class="grid grid-cols-2 gap-2">
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">ID PERSONAL</label>
-                    <input type="text" id="idPersonal" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm placeholder-gray-400" placeholder="ID o Folio" required>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">ID Personal *</label>
+                    <input type="text" id="idPersonal" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" placeholder="Ej. 1024" required>
                 </div>
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">NÓMINA</label>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">Tipo de Nómina *</label>
                     <select id="selectNomina" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required>
-                        <option value="">-- Selecciona --</option>
-                        <option value="Servidor de la Nación">SERVIDOR DE LA NACIÓN</option>
-                        <option value="UBA">SERVIDOR DE LA NACIÓN DE PROGRAMAS</option>
+                        <option value="">Selecciona</option>
+                        <option value="Servidor de la Nación">Servidor de la Nación</option>
+                        <option value="UBA">UBA</option>
                     </select>
                 </div>
             </div>
 
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">NOMBRE</label>
-                <select id="selectNombre" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required></select>
+            <!-- Buscador de Nombre -->
+            <div class="relative">
+                <label class="block text-xs font-bold text-gray-700 mb-1">Nombre del Elemento *</label>
+                <input type="text" id="inputNombre" autocomplete="off" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" placeholder="Escribe para buscar tu nombre..." required oninput="filtrarNombres(this.value)">
+                <div id="sugerenciasNombre" class="suggestions-box absolute left-0 right-0 bg-white border border-gray-300 rounded-xl mt-1 hidden shadow-lg"></div>
+            </div>
+
+            <!-- Buscador de Comisión -->
+            <div class="relative">
+                <label class="block text-xs font-bold text-gray-700 mb-1">Comisión de Trabajo *</label>
+                <input type="text" id="inputComision" autocomplete="off" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" placeholder="Escribe para buscar comisión..." required oninput="filtrarComisiones(this.value)">
+                <div id="sugerenciasComision" class="suggestions-box absolute left-0 right-0 bg-white border border-gray-300 rounded-xl mt-1 hidden shadow-lg"></div>
             </div>
 
             <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">COMISIÓN DE TRABAJO</label>
-                <select id="selectComision" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required></select>
-            </div>
-
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">MUNICIPIO</label>
+                <label class="block text-xs font-bold text-gray-700 mb-1">Municipio de Labor *</label>
                 <select id="selectMunicipio" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm" required></select>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                <div>
-                    <span class="block text-[11px] font-bold text-gray-500 uppercase">FECHA</span>
-                    <span id="txtFecha" class="text-sm font-semibold text-gray-800">—</span>
+            <!-- Apartado de Justificantes -->
+            <div class="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="checkJustificante" class="w-4 h-4 text-amber-600 rounded border-gray-300" onchange="toggleJustificante()">
+                    <label for="checkJustificante" class="text-xs font-bold text-amber-800 cursor-pointer">¿Reportar Incapacidad / Permiso / Comisión fuera?</label>
                 </div>
-                <div>
-                    <span class="block text-[11px] font-bold text-gray-500 uppercase">HORA</span>
-                    <span id="txtHora" class="text-sm font-semibold text-gray-800">—</span>
+                <div id="camposJustificante" class="hidden">
+                    <label class="block text-xs font-semibold text-amber-900 mb-1">Motivo de la Incidencia *</label>
+                    <select id="selectMotivo" class="w-full p-2.5 bg-white border border-amber-300 rounded-lg text-sm">
+                        <option value="">-- Seleccione el Motivo --</option>
+                        <option value="Incapacidad Médica (ISSSTE)">Incapacidad Médica (ISSSTE)</option>
+                        <option value="Permiso Oficial Con Goce">Permiso Oficial Con Goce</option>
+                        <option value="Periodo Vacacional Institucional">Periodo Vacacional Institucional</option>
+                        <option value="Comisión Fuera de Zona Operativa">Comisión Fuera de Zona Operativa</option>
+                    </select>
                 </div>
             </div>
 
+            <div class="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200 text-center">
+                <div>
+                    <span class="block text-[10px] font-bold text-gray-500 uppercase">Fecha</span>
+                    <span id="txtFecha" class="text-xs font-semibold text-gray-800">—</span>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-bold text-gray-500 uppercase">Hora</span>
+                    <span id="txtHora" class="text-xs font-semibold text-gray-800">—</span>
+                </div>
+            </div>
+
+            <!-- Carga de Evidencia Obligatoria (Camara o Archivo) -->
             <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center bg-gray-50">
                 <label class="block cursor-pointer">
-                    <span class="text-indigo-600 font-medium text-sm block mb-2">📸 TOMAR FOTOGRAFÍA</span>
-                    <input type="file" id="fotoInput" accept="image/*" capture="environment" class="hidden" required>
+                    <span id="labelFoto" class="text-indigo-600 font-medium text-xs block mb-2">📸 Seleccionar Archivo o Tomar Foto *</span>
+                    <input type="file" id="fotoInput" accept="image/*,application/pdf" class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700" required>
                 </label>
-                <div id="previewContainer" class="hidden mt-2">
-                    <img id="fotoPreview" class="w-full h-40 object-cover rounded-lg mx-auto">
-                </div>
             </div>
 
-            <div id="gpsStatus" class="text-xs text-center text-gray-500 font-mono bg-gray-50 p-2 rounded-lg">
-                DETECTANDO COORDENADAS GPS...
+            <div id="gpsStatus" class="text-[11px] text-center text-red-600 font-mono bg-red-50 p-2 rounded-lg">
+                ⚠️ Esperando Coordenadas GPS Obligatorias...
             </div>
 
             <button type="submit" class="w-full bg-[#691C32] text-white p-3.5 rounded-xl font-bold shadow-md hover:bg-[#4c1222]">
-                REGISTRAR ASISTENCIA
+                Enviar Registro Oficial
             </button>
         </form>
     </div>
 
-    <!-- SECCIÓN 2: PANEL ADMINISTRADOR PRIVADO (REPORTES, CRUCES Y RESET) -->
+    <!-- PANEL DE ADMINISTRACIÓN CONFIGURABLE -->
     <div id="vistaAdmin" class="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 mt-4 hidden">
         <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold text-gray-800">PANEL DE CONTROL EXCLUSIVO</h2>
-            <button onclick="cerrarSesionAdmin()" class="text-xs bg-gray-600 text-white px-3 py-1 rounded-lg">Cerrar Sesión</button>
+            <div>
+                <h2 class="text-lg font-bold text-gray-800">Panel Administrativo</h2>
+                <span id="badgeRol" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded"></span>
+            </div>
+            <button onclick="cerrarAdmin()" class="text-xs bg-gray-600 text-white px-3 py-1 rounded-lg">Salir</button>
         </div>
 
-        <!-- Botones de Acción -->
         <div class="grid grid-cols-2 gap-2 mb-4">
-            <button onclick="exportarExcel()" class="bg-green-700 text-white p-2.5 rounded-xl text-sm font-bold shadow hover:bg-green-800">
-                📊 Descargar Excel
-            </button>
-            <button onclick="ejecutarCruce()" class="bg-indigo-600 text-white p-2.5 rounded-xl text-sm font-bold shadow hover:bg-indigo-700">
-                🔍 Recargar Cruce
+            <button onclick="exportarExcelUnificado()" class="bg-green-700 text-white p-2.5 rounded-xl text-xs font-bold shadow hover:bg-green-800">📊 Descargar Excel</button>
+            <button onclick="actualizarPanelesYMapa()" class="bg-indigo-600 text-white p-2.5 rounded-xl text-xs font-bold shadow hover:bg-indigo-700">🔄 Actualizar Datos</button>
+        </div>
+
+        <!-- Botón de borrado exclusivo para la cuenta maestra -->
+        <div id="seccionResetMaestro" class="mb-4 hidden">
+            <button onclick="resetearSistemaMaestro()" class="w-full bg-red-600 text-white p-2 rounded-xl text-xs font-bold uppercase hover:bg-red-700 shadow">
+                🚨 Resetear / Limpiar Todos los Registros del Día
             </button>
         </div>
 
-        <!-- Botón de Reset Total -->
-        <div class="mb-6">
-            <button onclick="resetearSistema()" class="w-full bg-red-600 text-white p-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-red-700 shadow">
-                🚨 Resetear / Limpiar Todos los Registros
-            </button>
+        <!-- Mapa de Asistencias del Día -->
+        <div class="mb-4 space-y-1">
+            <span class="text-xs font-bold text-gray-700 block">🗺️ Mapa de Monitoreo Geográfico:</span>
+            <div id="mapa"></div>
         </div>
 
-        <!-- Resultados del Cruce -->
+        <!-- Listados de Control -->
         <div class="space-y-4">
             <div class="bg-red-50 p-4 rounded-xl border border-red-200">
-                <h3 class="text-sm font-bold text-red-800 mb-2">⚠️ ELEMENTOS OMISOS HOY (<span id="numOmisos">0</span>)</h3>
-                <ul id="listaOmisos" class="text-xs text-red-700 list-disc pl-4 space-y-1 max-h-40 overflow-y-auto">
-                    <!-- Elementos faltantes -->
-                </ul>
+                <h3 class="text-xs font-bold text-red-800 mb-2">⚠️ ELEMENTOS OMISOS HOY (<span id="numOmisos">0</span>)</h3>
+                <ul id="listaOmisos" class="text-xs text-red-700 list-disc pl-4 space-y-1 max-h-40 overflow-y-auto"></ul>
             </div>
-
             <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <h3 class="text-sm font-bold text-gray-800 mb-2">📋 Asistencias Registradas (<span id="numAsistencias">0</span>)</h3>
-                <div id="tablaAsistencias" class="text-[11px] text-gray-600 space-y-2 max-h-60 overflow-y-auto">
-                    <!-- Registros guardados -->
-                </div>
+                <h3 class="text-xs font-bold text-gray-800 mb-2">📋 Concentrado General Activo (<span id="numAsistencias">0</span>)</h3>
+                <div id="tablaAsistencias" class="text-[10px] text-gray-600 space-y-2 max-h-40 overflow-y-auto"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // ==========================================
-        // CONFIGURACIÓN CENTRAL
-        // ==========================================
-        const CLAVE_ADMIN_SECRETA = "1827";
+        // CONFIGURACIÓN DE CREDENCIALES DE ACCESO
+        const CLAVE_MAESTRA = "1234";
+        const CLAVE_CONSULTA = "4321";
+        
+        // URL DE TU FUTURO SERVIDOR CENTRALIZADO (GOOGLE APPS SCRIPT / WEBHOOK)
+        const URL_SERVIDOR_CENTRAL = "https://script.google.com/macros/s/TU_SCRIPT_ID/exec"; 
 
-        const BASE_DE_DATOS_LOCAL = {
-            personal: ["AGUSTÍN BUENAVENTURA GISPERT BURGOS",
-                "ALEJANDRA CARRILLO DELGADO",
-                "ALEJANDRA JUDITH TRIGUEROS VARGAS",
-                "ALEJANDRINA MORA GARCÍA",
-                "ALICIA MARTINEZ MARIN",
-                "ALMA ROSA FLORES MONTES",
-                "ALMA ROSA VALENTIN COSINO",
-                "ANA MARIA SOLANO PAREDES",
-                "BEATRIZ HERNÁNDEZ NIETO",
-                "BLANCA ENEYDA ESTRADA AGUILAR",
-                "BLANCA ESTELA ARRIAGA ROJAS",
-                "BRISA MARÍA VILLASEÑOR SOSA",
-                "CARLOS ALBERTO PEREZ CARBAJAL",
-                "CESAR AGUIRRE JUAREZ",
-                "CINTHYA VERONICA CALLEROS GUTIERREZ",
-                "CLAUDIA LILIANA INFANTE PAREDES",
-                "CRISTÓBAL CORTES GONZALEZ",
-                "DANIEL GARCIA BAUTISTA",
-                "DANIELA ÁVALOS VÁZQUEZ",
-                "DANIELA JACQUELINE SALAZAR SANCHEZ",
-                "DOLORES JANETH DE LA CRUZ GARCIA",
-                "EDITH FLORES HUERTA",
-                "EDUARDO RAUL HERNANDEZ HERNANDEZ",
-                "ENRIQUETA NOEMI GUERRERO OCHOA",
-                "ERICKA BERENICE OZUNA GARCÍA",
-                "ESPERANZA BUCIO GONZALEZ",
-                "ESTEFANIA VILLALOBOS LOPEZ",
-                "FABIOLA TRISTÁN VELASCO",
-                "FELIPE NAJERA FIGUEROA",
-                "FRANCISCO TIRADO ESPINDOLA",
-                "GABRIELA VARGAS NUÑEZ",
-                "GISSELA CAROLINA TORRES PÉREZ",
-                "GLADIS JANETH DE LA CRUZ NUÑEZ",
-                "GLADYS LILIANA RUIZ VALENZUELA",
-                "IGNACIO GONZALEZ HERNANDEZ",
-                "JACIEL RUIZ VELASCO SEGOVIANO",
-                "JENNIFER NAJAR MONICO",
-                "JOANA SOFIA LOPEZ CAMACHO",
-                "JOSE GABRIEL LÓPEZ AGUILAR",
-                "JOSEFINA RIVAS NAVARRO",
-                "JUAN MANUAL HERNÁNDEZ ENRIQUEZ",
-                "KARINA ELIZABETH TOVAR ENRIQUEZ",
-                "KIMBERLY JOSELINE LOPEZ LEDESMA",
-                "LAURA CRISTINA LOPEZ CAZARES",
-                "LESLI FERNANDA MORENO AYALA",
-                "LIZETH BERENICE GARROCHO RAVELERO",
-                "LUIS FELIPE ALDAMA MOTOLINIA",
-                "LUIS GABRIEL DOMINGUEZ ARTEAGA",
-                "LUZ MARIA ENEIDA CORDOBA SANCHEZ",
-                "MANUEL ANTONIO RODRIGUEZ CORTES",
-                "MARGARITA ESTRADA MEJIA",
-                "MARGARITO BAUTISTA ORTIZ",
-                "MARIA ALEJANDRA QUIÑONES SEGURA",
-                "MARIA DE LA LUZ AIDEE FLORES OROZCO",
-                "MARIA DE LOS ANGELES CASTORENA CARDENAS",
-                "MARIA DE LOURDES HERNANDEZ RODRIGUEZ",
-                "MARIA DEL CARMEN VALLE MAGDALENO",
-                "MARÍA DEL CARMEN VILLARREAL GOMEZ",
-                "MARIA DEL ROCIO CORDOVA AVALOS",
-                "MARIA GUADALUPE CHAVIRA REYES",
-                "MARÍA ISABEL SANDOVAL SALAS",
-                "MARIA JULIA OCAMPO LUNA",
-                "MARIA PÉREZ GUTIÉRREZ",
-                "MARIA SOFIA CORONA ARIAS",
-                "MARIA TERESA VAZQUEZ ALONSO",
-                "MARIO ALEJANDRO NAVA PRECIADO",
-                "MARISOL FLORES TOVAR",
-                "MARISOL RAMOS MACIEL",
-                "MARITZA ELIZABETH RAMIREZ ACUÑA",
-                "MARTHA CECILIA MUÑOZ FLORES",
-                "MARTHA ELVIRA DE LA TORRE GUTIERREZ",
-                "MARTHA PATRICIA CASTORENA CARDENAS",
-                "MARTHA PATRICIA GUZMAN AMAYA",
-                "MARTIN JAVIER DISS CASTILLO",
-                "MICHELLE ZIUALPILLI CASILLAS SANTAMARIA",
-                "MONICA GARCIA MONTES",
-                "NANCY MORA GARCIA",
-                "NATHALIE ARELY CORTES MELENDEZ",
-                "NOELIA CONTRERAS QUEZADA",
-                "NOEMI YAZMIN LARA HERRERA",
-                "OFELIA GARCÍA HERNÁNDEZ",
-                "OSWALDO ARTURO DE LEÓN SAUCEDO",
-                "PATRICIA ARACELI CARDENAS BUJANDA",
-                "PATRICIA TREJO CARRILLO",
-                "PEDRO ORTIZ MORA",
-                "RAMÓN ALEJANDRO LÓPEZ CALIXTO",
-                "RAQUEL MARGARITA CASTILLO MARTINEZ",
-                "ROBERTO JOAQUÍN EDUARDO CANO YAHUACA",
-                "ROCIO FAUSTINO LEÓN",
-                "ROGELIO SALAZAR GARCÍA",
-                "ROSA AURA RIVER ORTEGA",
-                "ROSA MARIA CAMACHO JIMENEZ",
-                "RUBÉN BAUTISTA SANDOVAL",
-                "SALVADOR JAUREGUI HERNANDEZ",
-                "SANDRA ITZEL GUTIERREZ PEREZ",
-                "SERGIO IVAN GONZALEZ ROBLEDO",
-                "SILVIA AYALA LUNA",
-                "VERONICA ITZEL NAJERA RIVERA",
-                "VIOLETA ASUNCIÓN GARCÍA ARCINIEGA",
-                "ZAIRA YESENIA MONTES DE OCA DAVALOS"], 
-            comisiones: [
-"ADMIN SADER",
-"VISITA CASA POR CASA",
-"ARCHIVO SADER",
-"ATENCIÓN CID SADER ÁLAMO",
-"ATENCIÓN INAPAM SADER ÁLAMO",
-"BRIGADA SEGOB","CAPTURA",
-"OPERATIVO INCORPORACIÓN",
-"REVISIÓN EXPEDIENTES PALACIO FEDERAL",
-"SUPERVISOR SS",
-"ATENCIÓN CID CUYUTLÁN",
-"ENTREGA DE OPERATIVO",
-"ENTREGA TARJETAS EL REFUGIO",
-"CAPTURA TARJETAS",
-"ENTREGA DE TARJETAS CUYUTLÁN",
-"RUTA POSTRADOS Y DOMICILIO",
-"COORDINACIÓN REVISIÓN EXPEDIENTES PALACIO FEDERAL",
-"ENTREGA DE CASOS ESPECIALES PALACIO",
-"ARCHIVO CUYUTLÁN",
-"SUCURSAL BANCARIA CUYUTLÁN",
-"SUCURSAL BANCARIA TLAQUEPAQUE",
-"SUCURSAL BANCARIA SAN SEBASTIAN",
-"INCORPORACIÓN PCD",
-"LEEN",
-"APOYO ADMINISTRATIVO",
-"ENTREGA DE TARJETAS BIENPESCA"
-],
-            municipios: ["SAN PEDRO TLAQUEPAQUE","TLAJOMULCO DE ZUÑIGA"]
+        const BASE_DATOS = {
+            personal: [
+                "AGUSTÍN BUENAVENTURA GISPERT BURGOS", "ALEJANDRA CARRILLO DELGADO", "ALEJANDRA JUDITH TRIGUEROS VARGAS",
+                "ALEJANDRINA MORA GARCÍA", "ALICIA MARTINEZ MARIN", "ALMA ROSA FLORES MONTES", "ALMA ROSA VALENTIN COSINO",
+                "ANA MARIA SOLANO PAREDES", "BEATRIZ HERNÁNDEZ NIETO", "BLANCA ENEYDA ESTRADA AGUILAR", "BLANCA ESTELA ARRIAGA ROJAS",
+                "BRISA MARÍA VILLASEÑOR SOSA", "CARLOS ALBERTO PEREZ CARBAJAL", "CESAR AGUIRRE JUAREZ", "CINTHYA VERONICA CALLEROS GUTIERREZ",
+                "CLAUDIA LILIANA INFANTE PAREDES", "CRISTÓBAL CORTES GONZALEZ", "DANIEL GARCIA BAUTISTA", "DANIELA ÁVALOS VÁZQUEZ",
+                "DANIELA JACQUELINE SALAZAR SANCHEZ", "DOLORES JANETH DE LA CRUZ GARCIA", "EDITH FLORES HUERTA", "EDUARDO RAUL HERNANDEZ HERNANDEZ",
+                "ENRIQUETA NOEMI GUERRERO OCHOA", "ERICKA BERENICE OZUNA GARCÍA", "ESPERANZA BUCIO GONZALEZ", "ESTEFANIA VILLALOBOS LOPEZ",
+                "FABIOLA TRISTÁN VELASCO", "FELIPE NAJERA FIGUEROA", "FRANCISCO TIRADO ESPINDOLA", "GABRIELA VARGAS NUÑEZ",
+                "GISSELA CAROLINA TORRES PÉREZ", "GLADIS JANETH DE LA CRUZ NUÑEZ", "GLADYS LILIANA RUIZ VALENZUELA", "IGNACIO GONZALEZ HERNANDEZ",
+                "JACIEL RUIZ VELASCO SEGOVIANO", "JENNIFER NAJAR MONICO", "JOANA SOFIA LOPEZ CAMACHO", "JOSE GABRIEL LÓPEZ AGUILAR",
+                "JOSEFINA RIVAS NAVARRO", "JUAN MANUAL HERNÁNDEZ ENRIQUEZ", "KARINA ELIZABETH TOVAR ENRIQUEZ", "KIMBERLY JOSELINE LOPEZ LEDESMA",
+                "LAURA CRISTINA LOPEZ CAZARES", "LESLI FERNANDA MORENO AYALA", "LIZETH BERENICE GARROCHO RAVELERO", "LUIS FELIPE ALDAMA MOTOLINIA",
+                "LUIS GABRIEL DOMINGUEZ ARTEAGA", "LUZ MARIA ENEIDA CORDOBA SANCHEZ", "MANUEL ANTONIO RODRIGUEZ CORTES", "MARGARITA ESTRADA MEJIA",
+                "MARGARITO BAUTISTA ORTIZ", "MARIA ALEJANDRA QUIÑONES SEGURA", "MARIA DE LA LUZ AIDEE FLORES OROZCO", "MARIA DE LOS ANGELES CASTORENA CARDENAS",
+                "MARIA DE LOURDES HERNANDEZ RODRIGUEZ", "MARIA DEL CARMEN VALLE MAGDALENO", "MARÍA DEL CARMEN VILLARREAL GOMEZ", "MARIA DEL ROCIO CORDOVA AVALOS",
+                "MARIA GUADALUPE CHAVIRA REYES", "MARÍA ISABEL SANDOVAL SALAS", "MARIA JULIA OCAMPO LUNA", "MARIA PÉREZ GUTIÉRREZ",
+                "MARIA SOFIA CORONA ARIAS", "MARIA TERESA VAZQUEZ ALONSO", "MARIO ALEJANDRO NAVA PRECIADO", "MARISOL FLORES TOVAR",
+                "MARISOL RAMOS MACIEL", "MARITZA ELIZABETH RAMIREZ ACUÑA", "MARTHA CECILIA MUÑOZ FLORES", "MARTHA ELVIRA DE LA TORRE GUTIERREZ",
+                "MARTHA PATRICIA CASTORENA CARDENAS", "MARTHA PATRICIA GUZMAN AMAYA", "MARTIN JAVIER DISS CASTILLO", "MICHELLE ZIUALPILLI CASILLAS SANTAMARIA",
+                "MONICA GARCIA MONTES", "NANCY MORA GARCIA", "NATHALIE ARELY CORTES MELENDEZ", "NOELIA CONTRERAS QUEZADA", "NOEMI YAZMIN LARA HERRERA",
+                "OFELIA GARCÍA HERNÁNDEZ", "OSWALDO ARTURO DE LEÓN SAUCEDO", "PATRICIA ARACELI CARDENAS BUJANDA", "PATRICIA TREJO CARRILLO",
+                "PEDRO ORTIZ MORA", "RAMÓN ALEJANDRO LÓPEZ CALIXTO", "RAQUEL MARGARITA CASTILLO MARTINEZ", "ROBERTO JOAQUÍN EDUARDO CANO YAHUACA",
+                "ROCIO FAUSTINO LEÓN", "ROGELIO SALAZAR GARCÍA", "ROSA AURA RIVER ORTEGA", "ROSA MARIA CAMACHO JIMENEZ", "RUBÉN BAUTISTA SANDOVAL",
+                "SALVADOR JAUREGUI HERNANDEZ", "SANDRA ITZEL GUTIERREZ PEREZ", "SERGIO IVAN GONZALEZ ROBLEDO", "SILVIA AYALA LUNA",
+                "VERONICA ITZEL NAJERA RIVERA", "VIOLETA ASUNCIÓN GARCÍA ARCINIEGA", "ZAIRA YESENIA MONTES DE OCA DAVALOS"
+            ],
+            comisiones: ["Supervisión Operativa", "Entrega de Apoyos", "Logística Territorial"],
+            municipios: ["Guadalajara", "Zapopan", "Tlaquepaque", "Tonalá"]
         };
 
-        let coordenadas = { lat: null, lon: null };
-        let fotoBase64 = "";
-        let fechaAuto = "";
-        let horaAuto = "";
+        let gpsCoords = { lat: null, lon: null };
+        let rolActual = "";
+        let mapaLeaflet = null;
+        let marcadoresMapa = [];
 
-        function accederComoAdmin() {
-            const intentoClave = prompt("Introduce la clave de Administrador:");
-            if (intentoClave === CLAVE_ADMIN_SECRETA) {
-                cambiarVista('vistaAdmin');
-            } else if (intentoClave !== null) {
-                alert("❌ Clave incorrecta.");
-            }
+        // BUSCADORES EN TIEMPO REAL
+        function filtrarNombres(val) {
+            const box = document.getElementById('sugerenciasNombre');
+            if(!val) { box.classList.add('hidden'); return; }
+            const filtrados = BASE_DATOS.personal.filter(p => p.toLowerCase().includes(val.toLowerCase()));
+            box.innerHTML = "";
+            if(filtrados.length > 0) {
+                box.classList.remove('hidden');
+                filtrados.forEach(f => {
+                    const d = document.createElement('div');
+                    d.className = "p-2.5 hover:bg-gray-100 text-xs cursor-pointer border-b border-gray-100";
+                    d.innerText = f;
+                    d.onclick = () => { document.getElementById('inputNombre').value = f; box.classList.add('hidden'); };
+                    box.appendChild(d);
+                });
+            } else { box.classList.add('hidden'); }
         }
 
-        function cerrarSesionAdmin() { cambiarVista('vistaUsuario'); }
+        function filtrarComisiones(val) {
+            const box = document.getElementById('sugerenciasComision');
+            if(!val) { box.classList.add('hidden'); return; }
+            const filtrados = BASE_DATOS.comisiones.filter(c => c.toLowerCase().includes(val.toLowerCase()));
+            box.innerHTML = "";
+            if(filtrados.length > 0) {
+                box.classList.remove('hidden');
+                filtrados.forEach(f => {
+                    const d = document.createElement('div');
+                    d.className = "p-2.5 hover:bg-gray-100 text-xs cursor-pointer border-b border-gray-100";
+                    d.innerText = f;
+                    d.onclick = () => { document.getElementById('inputComision').value = f; box.classList.add('hidden'); };
+                    box.appendChild(d);
+                });
+            } else { box.classList.add('hidden'); }
+        }
 
-        function cambiarVista(idVista) {
+        function toggleJustificante() {
+            const activo = document.getElementById('checkJustificante').checked;
+            document.getElementById('camposJustificante').classList.toggle('hidden', !activo);
+            document.getElementById('selectMotivo').required = activo;
+        }
+
+        // CONTROL DE ACCESOS POR CONTRASEÑA
+        function solicitarAccesoAdmin() {
+            const pass = prompt("Ingrese contraseña de seguridad:");
+            if (pass === CLAVE_MAESTRA) {
+                rolActual = "MASTER";
+                abrirAdminPanel();
+            } else if (pass === CLAVE_CONSULTA) {
+                rolActual = "CONSULTA";
+                abrirAdminPanel();
+            } else if (pass !== null) { alert("❌ Contraseña no autorizada."); }
+        }
+
+        function abrirAdminPanel() {
             document.getElementById('vistaUsuario').classList.add('hidden');
+            document.getElementById('vistaAdmin').classList.remove('hidden');
+            
+            const badge = document.getElementById('badgeRol');
+            if(rolActual === "MASTER") {
+                badge.className = "text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-red-100 text-red-800";
+                badge.innerText = "Cuenta Maestra";
+                document.getElementById('seccionResetMaestro').classList.remove('hidden');
+            } else {
+                badge.className = "text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800";
+                badge.innerText = "Consulta Limitada";
+                document.getElementById('seccionResetMaestro').classList.add('hidden');
+            }
+            
+            setTimeout(inicializarMapa, 200);
+            actualizarPanelesYMapa();
+        }
+
+        function cerrarAdmin() {
             document.getElementById('vistaAdmin').classList.add('hidden');
-            document.getElementById(idVista).classList.remove('hidden');
-            if(idVista === 'vistaAdmin') cargarDatosAdmin();
+            document.getElementById('vistaUsuario').classList.remove('hidden');
         }
 
-        function actualizarReloj() {
-            const ahora = new Date();
-            fechaAuto = ahora.toLocaleDateString('es-MX');
-            horaAuto = !isNaN(ahora) ? ahora.toLocaleTimeString('es-MX', { hour12: false }) : "—";
-            document.getElementById('txtFecha').innerText = fechaAuto;
-            document.getElementById('txtHora').innerText = horaAuto;
-        }
-        setInterval(actualizarReloj, 1000);
-
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    coordenadas.lat = pos.coords.latitude;
-                    coordenadas.lon = pos.coords.longitude;
-                    document.getElementById('gpsStatus').innerText = `📍 GPS Listo: ${coordenadas.lat.toFixed(5)}, ${coordenadas.lon.toFixed(5)}`;
-                    document.getElementById('gpsStatus').style.color = "green";
-                },
-                () => { document.getElementById('gpsStatus').innerText = "❌ Enciende el GPS."; },
-                { enableHighAccuracy: true }
-            );
+        // MAPA GEOGRÁFICO RESPETANDO PRIVACIDAD LOCAL
+        function inicializarMapa() {
+            if (mapaLeaflet === null) {
+                mapaLeaflet = L.map('mapa').setView([20.635, -103.313], 11); // Centrado general en zona operativa
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(mapaLeaflet);
+            }
         }
 
-        function inicializarApp() {
-            const selectNombre = document.getElementById('selectNombre');
-            selectNombre.innerHTML = '<option value="">-- Selecciona --</option>';
-            BASE_DE_DATOS_LOCAL.personal.forEach(p => selectNombre.innerHTML += `<option value="${p}">${p}</option>`);
-
-            const selectComision = document.getElementById('selectComision');
-            selectComision.innerHTML = '<option value="">-- Selecciona --</option>';
-            BASE_DE_DATOS_LOCAL.comisiones.forEach(c => selectComision.innerHTML += `<option value="${c}">${c}</option>`);
-
-            const selectMunicipio = document.getElementById('selectMunicipio');
-            selectMunicipio.innerHTML = '<option value="">-- Selecciona --</option>';
-            BASE_DE_DATOS_LOCAL.municipios.forEach(m => selectMunicipio.innerHTML += `<option value="${m}">${m}</option>`);
-            
-            actualizarReloj();
-        }
-
-        document.getElementById('fotoInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const img = new Image();
-                img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 400;
-                    let width = img.width, height = img.height;
-                    if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                    canvas.width = width; canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    fotoBase64 = canvas.toDataURL('image/jpeg', 0.4); 
-                    document.getElementById('fotoPreview').src = fotoBase64;
-                    document.getElementById('previewContainer').classList.remove('hidden');
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
-        });
-
-        document.getElementById('attendanceForm').addEventListener('submit', function(e) {
+        // VALIDACIÓN Y ENVÍO DE DATOS
+        function procesarFormulario(e) {
             e.preventDefault();
-
-            // 1. VALIDACIÓN estricta de Horario Permisible (De 7:00 AM a 10:01 AM)
+            const esJustificante = document.getElementById('checkJustificante').checked;
             const ahora = new Date();
-            const horaActual = ahora.getHours();
-            const minutosActual = ahora.getMinutes();
+            const hora = ahora.getHours();
+            const min = ahora.getMinutes();
 
-            const demasiadoTemprano = (horaActual < 7);
-            const demasiadoTarde = (horaActual > 10 || (horaActual === 10 && minutosActual >= 2));
-
-            if (demasiadoTemprano || demasiadoTarde) {
-                alert("❌ ERROR: Fuera del horario permitido. La plataforma solo recibe asistencias desde las 07:00 AM hasta las 10:01 AM de forma institucional.");
+            if (!gpsCoords.lat || !gpsCoords.lon) {
+                alert("❌ ERROR CRÍTICO: No se puede registrar. Las coordenadas GPS son obligatorias y no han sido detectadas.");
                 return;
             }
 
-            if (!coordenadas.lat) { alert("Se requieren datos GPS."); return; }
+            const nombreValido = BASE_DATOS.personal.includes(document.getElementById('inputNombre').value);
+            if(!nombreValido) {
+                alert("❌ ERROR: El nombre escrito no pertenece a la plantilla oficial de la delegación.");
+                return;
+            }
+
+            if (!esJustificante) {
+                if (hora < 7 || hora > 10 || (hora === 10 && min >= 2)) {
+                    alert("❌ HORARIO BLOQUEADO: Solo se reciben asistencias regulares entre 07:00 AM y 10:01 AM.\n\nSi posee un justificante válido, active la casilla de Incidencias.");
+                    return;
+                }
+            }
+
+            const registros = JSON.parse(localStorage.getItem('saci_global_data')) || [];
+            const fechaHoy = ahora.toLocaleDateString('es-MX');
+            const yaCargo = registros.some(r => r.nombre === document.getElementById('inputNombre').value && r.fecha === fechaHoy);
             
-            const nombreSeleccionado = document.getElementById('selectNombre').value;
-            let asistenciasAlmacenadas = JSON.parse(localStorage.getItem('saci_asistencias')) || [];
-
-            // 2. VALIDACIÓN DE REGISTRO DUPLICADO
-            const yaAsistio = asistenciasAlmacenadas.some(r => r.nombre === nombreSeleccionado && r.fecha === fechaAuto);
-            if (yaAsistio) {
-                alert(`⚠️ El elemento ${nombreSeleccionado} ya registró su asistencia el día de hoy. No se permiten duplicados.`);
+            if(yaCargo) {
+                alert("⚠️ Registro duplicado interceptado. Este elemento ya subió su información el día de hoy.");
                 return;
             }
 
-            // 3. GENERACIÓN DE ID DE REGISTRO ÚNICO AUTOMÁTICO
-            const marcaTiempo = ahora.getDate().toString() + (ahora.getMonth()+1).toString() + ahora.getFullYear().toString();
-            const numAleatorio = Math.floor(1000 + Math.random() * 9000);
-            const idRegistroUnico = `SACI-${marcaTiempo}-${numAleatorio}`;
+            const folio = `SACI-${ahora.getDate()}${ahora.getMonth()+1}-${Math.floor(1000 + Math.random() * 9000)}`;
 
             const nuevoRegistro = {
-                idRegistro: idRegistroUnico,
+                folio: folio,
                 id: document.getElementById('idPersonal').value,
                 nomina: document.getElementById('selectNomina').value,
-                nombre: nombreSeleccionado,
-                comision: document.getElementById('selectComision').value,
+                nombre: document.getElementById('inputNombre').value,
+                comision: document.getElementById('inputComision').value,
                 municipio: document.getElementById('selectMunicipio').value,
-                fecha: fechaAuto, hora: horaAuto,
-                latitud: coordenadas.lat, longitud: coordenadas.lon
+                fecha: fechaHoy,
+                hora: ahora.toLocaleTimeString('es-MX', { hour12: false }),
+                estatus: esJustificante ? document.getElementById('selectMotivo').value : "ASISTENCIA REGULAR",
+                lat: gpsCoords.lat,
+                lon: gpsCoords.lon
             };
 
-            asistenciasAlmacenadas.push(nuevoRegistro);
-            localStorage.setItem('saci_asistencias', JSON.stringify(asistenciasAlmacenadas));
+            registros.push(nuevoRegistro);
+            localStorage.setItem('saci_global_data', JSON.stringify(registros));
 
-            // NOTIFICACIÓN PERSONALIZADA CON NOMBRE E ID ÚNICO
-            alert(`📢 ¡ÉXITO!\nAsistencia guardada correctamente para: ${nuevoRegistro.nombre}.\nSu ID de Registro es: ${idRegistroUnico}`);
+            // ENVÍO DE DATOS AUTOMÁTICO AL EXCEL CENTRALIZADO (OPCIONAL EN PRODUCCIÓN)
+            fetch(URL_SERVIDOR_CENTRAL, {
+                method: "POST",
+                body: JSON.stringify(nuevoRegistro)
+            }).catch(err => console.log("Modo centralizado offline o requiere vinculación a script."));
+
+            alert(`📢 REGISTRO EXITOSO\nFolio: ${folio}\nTipo: ${nuevoRegistro.estatus}`);
             location.reload();
-        });
-
-        function cargarDatosAdmin() {
-            const registros = JSON.parse(localStorage.getItem('saci_asistencias')) || [];
-            document.getElementById('numAsistencias').innerText = registros.length;
-            
-            const tabla = document.getElementById('tablaAsistencias');
-            tabla.innerHTML = "";
-            registros.slice().reverse().forEach(r => {
-                tabla.innerHTML += `<div class="p-2 bg-white rounded border border-gray-200">
-                    <strong>[REG: ${r.idRegistro || 'N/A'}] [ID: ${r.id}] [${r.nomina || 'N/A'}] ${r.nombre}</strong> - ${r.municipio}<br>
-                    <span class="text-gray-400">${r.fecha} a las ${r.hora} | GPS: ${r.latitud}, ${r.longitud}</span>
-                </div>`;
-            });
-            ejecutarCruce();
         }
 
-        function ejecutarCruce() {
-            const registros = JSON.parse(localStorage.getItem('saci_asistencias')) || [];
+        function actualizarPanelesYMapa() {
+            const registros = JSON.parse(localStorage.getItem('saci_global_data')) || [];
             const hoy = new Date().toLocaleDateString('es-MX');
             
+            document.getElementById('numAsistencias').innerText = registros.length;
+            
+            // Render de listado
+            const tabla = document.getElementById('tablaAsistencias');
+            tabla.innerHTML = "";
+            
+            // Limpiar marcadores viejos del mapa
+            marcadoresMapa.forEach(m => mapaLeaflet.removeLayer(m));
+            marcadoresMapa = [];
+
+            registros.slice().reverse().forEach(r => {
+                tabla.innerHTML += `<div class="p-2 bg-white rounded border border-gray-200 mb-1">
+                    <strong>${r.nombre}</strong> (${r.estatus})<br><span class="text-gray-400">${r.fecha} ${r.hora}</span>
+                </div>`;
+
+                // Inyección de ubicaciones en el mapa
+                if(r.lat && r.lon && mapaLeaflet) {
+                    const colorIcono = r.estatus === "ASISTENCIA REGULAR" ? "green" : "orange";
+                    const marker = L.circleMarker([r.lat, r.lon], {
+                        radius: 8,
+                        fillColor: colorIcono,
+                        color: "#fff",
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(mapaLeaflet).bindPopup(`<b>${r.nombre}</b><br>${r.estatus}<br>${r.hora}`);
+                    marcadoresMapa.push(marker);
+                }
+            });
+
+            // Cálculo de Omisos
             const asistieronHoy = registros.filter(r => r.fecha === hoy).map(r => r.nombre);
-            const omisos = BASE_DE_DATOS_LOCAL.personal.filter(p => !asistieronHoy.includes(p));
+            const omisos = BASE_DATOS.personal.filter(p => !asistieronHoy.includes(p));
             
             document.getElementById('numOmisos').innerText = omisos.length;
             const listaU = document.getElementById('listaOmisos');
             listaU.innerHTML = "";
             
             if(omisos.length === 0) {
-                listaU.innerHTML = "<li>🎉 ¡Todo el personal ha reportado asistencia hoy!</li>";
+                listaU.innerHTML = "<li>🎉 Plantilla completa el día de hoy.</li>";
             } else {
                 omisos.forEach(o => { listaU.innerHTML += `<li>${o}</li>`; });
             }
         }
 
-        function exportarExcel() {
-            const registros = JSON.parse(localStorage.getItem('saci_asistencias')) || [];
-            if(registros.length === 0) { alert("No hay datos para exportar."); return; }
+        function exportarExcelUnificado() {
+            const registros = JSON.parse(localStorage.getItem('saci_global_data')) || [];
+            if(registros.length === 0) { alert("No se registran datos acumulados."); return; }
 
-            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-            csvContent += "ID Registro Unico,ID Personal,Tipo de Nomina,Nombre,Comision,Municipio,Fecha,Hora,Latitud,Longitud\n";
-
+            let csv = "data:text/csv;charset=utf-8,\uFEFF";
+            csv += "Folio Unico,ID,Nomina,Nombre del Elemento,Comision,Municipio,Fecha,Hora,Estatus Incidencia,Latitud,Longitud\n";
+            
             registros.forEach(r => {
-                csvContent += `"${r.idRegistro || ''}","${r.id}","${r.nomina || ''}","${r.nombre}","${r.comision}","${r.municipio}","${r.fecha}","${r.hora}","${r.latitud}","${r.longitud}"\n`;
+                csv += `"${r.folio}","${r.id}","${r.nomina}","${r.nombre}","${r.comision}","${r.municipio}","${r.fecha}","${r.hora}","${r.estatus}","${r.lat}","${r.lon}"\n`;
             });
 
-            const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `Reporte_Asistencias_${new Date().toLocaleDateString('es-MX')}.csv`);
+            link.setAttribute("href", encodeURI(csv));
+            link.setAttribute("download", `CONCENTRADO_SACI_GENERAL.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
 
-        function resetearSistema() {
-            const confirmar = confirm("⚠️ ¿Estás absolutamente seguro de borrar TODAS las asistencias de la memoria? Esta acción no se puede deshacer.");
-            if (confirmar) {
-                localStorage.removeItem('saci_asistencias');
-                alert("🔄 Sistema restablecido con éxito. Registros en cero.");
-                cargarDatosAdmin();
+        function resetearSistemaMaestro() {
+            if(confirm("⚠️ ¿Desea ejecutar el reset de seguridad diario? Se vaciarán las ubicaciones del mapa y los listados locales.")) {
+                localStorage.removeItem('saci_global_data');
+                alert("🔄 Datos del día reiniciados con éxito.");
+                actualizarPanelesYMapa();
             }
         }
 
-        window.onload = inicializarApp;
+        // INICIALIZADORES NATIVOS
+        window.onload = function() {
+            const mSel = document.getElementById('selectMunicipio');
+            mSel.innerHTML = '<option value="">Selecciona Municipio</option>';
+            BASE_DATOS.municipios.forEach(m => mSel.innerHTML += `<option value="${m}">${m}</option>`);
+
+            setInterval(() => {
+                const ahora = new Date();
+                document.getElementById('txtFecha').innerText = ahora.toLocaleDateString('es-MX');
+                document.getElementById('txtHora').innerText = ahora.toLocaleTimeString('es-MX', { hour12: false });
+            }, 1000);
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        gpsCoords.lat = pos.coords.latitude;
+                        gpsCoords.lon = pos.coords.longitude;
+                        const status = document.getElementById('gpsStatus');
+                        status.innerText = "📍 Coordenadas GPS Vinculadas Correctamente";
+                        status.className = "text-[11px] text-center text-green-700 font-mono bg-green-50 p-2 rounded-lg";
+                    },
+                    () => { alert("Permiso GPS denegado. Active su ubicación."); },
+                    { enableHighAccuracy: true }
+                );
+            }
+        };
+
+        // Cerrar autocompletado si hacen clic fuera
+        document.addEventListener('click', function(e) {
+            if(e.target.id !== 'inputNombre') document.getElementById('sugerenciasNombre').classList.add('hidden');
+            if(e.target.id !== 'inputComision') document.getElementById('sugerenciasComision').classList.add('hidden');
+        });
     </script>
 </body>
 </html>
